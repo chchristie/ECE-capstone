@@ -15,11 +15,11 @@ LSM6DS3 myIMU(I2C_MODE, 0x6A); // Accelerometer
 // Sparkfun sensor board
 
 // Reset pin, MFIO pin
-int resPin = 7;
-int mfioPin = 8;
+#define resPin  7
+#define mfioPin  8
 
-int width = 411; // Possible widths: 69, 118, 215, 411us
-int samples = 100; // Possible samples: 50, 100, 200, 400, 800, 1000, 1600, 3200 samples/second
+#define BIOSENSOR_WIDTH  411 // Possible widths: 69, 118, 215, 411us
+#define BIOSENSOR_SAMPLES  100 // Possible samples: 50, 100, 200, 400, 800, 1000, 1600, 3200 samples/second
 
 int past_heartrate = 0;
 
@@ -46,11 +46,11 @@ void setup() {
   // Configure acclerometer 
   myIMU.settings.accelEnabled = 1;
   myIMU.settings.accelRange = 2;        // ±2g
-  myIMU.settings.accelSampleRate = 4;   // 104 Hz
+  myIMU.settings.accelSampleRate = 8;   // 104 Hz
 
   // Disable other sensors
   myIMU.settings.gyroEnabled = 0;       // Disable gyro
-  myIMU.settings.tempEnabled = 1;       // Disable temperature
+  myIMU.settings.tempEnabled = 0;       // Disable temperature
 
   //Non-basic mode settings
   myIMU.settings.commMode = 1;
@@ -59,7 +59,7 @@ void setup() {
   myIMU.settings.accelFifoEnabled = 1;     //Set to include accelerometer in the FIFO
   myIMU.settings.accelFifoDecimation = 1;  //set 1 for on /1
   //myIMU.settings.fifoThreshold = 30000;      //
-  myIMU.settings.fifoSampleRate = 200;     // Hz 
+  myIMU.settings.fifoSampleRate = 400;     // Hz 
   myIMU.settings.fifoModeWord = 1;         // Continuous mode
 
   // Initialize IMU
@@ -81,7 +81,7 @@ void setup() {
   myIMU.fifoClear();
 
   uint8_t tempFIFO_CTRL5 = 0;
-  tempFIFO_CTRL5 |= LSM6DS3_ACC_GYRO_ODR_FIFO_100Hz;
+  tempFIFO_CTRL5 |= LSM6DS3_ACC_GYRO_ODR_FIFO_200Hz;
   tempFIFO_CTRL5 |= 1;
   myIMU.writeRegister(LSM6DS3_ACC_GYRO_FIFO_CTRL5, tempFIFO_CTRL5);
 
@@ -106,7 +106,7 @@ void setup() {
   }
 
   // Set pulse width.
-  error = bioHub.setPulseWidth(width);
+  error = bioHub.setPulseWidth(BIOSENSOR_WIDTH);
   if (error == 0){// Zero errors.
     Serial.println("Pulse Width Set.");
   }
@@ -123,7 +123,7 @@ void setup() {
 
   // Set sample rate per second. Remember that not every sample rate is
   // available with every pulse width. Check hookup guide for more information.  
-  error = bioHub.setSampleRate(samples);
+  error = bioHub.setSampleRate(BIOSENSOR_SAMPLES);
   if (error == 0){// Zero errors.
     Serial.println("Sample Rate Set.");
   }
@@ -166,7 +166,7 @@ void loop() {
     sendAccelerometerToBioHub();
 
     // Read step counter (2 bytes)
-    uint8_t dataByte = 0;
+    /*uint8_t dataByte = 0;
     uint16_t stepCount = 0;
 
     myIMU.readRegister(&dataByte, LSM6DS3_ACC_GYRO_STEP_COUNTER_H);
@@ -176,7 +176,7 @@ void loop() {
     stepCount |=  dataByte;
 
     Serial.print("Steps: ");
-    Serial.println(stepCount);
+    Serial.println(stepCount);*/
 
     
     // Read sensor hub
@@ -253,7 +253,7 @@ bool enableHostSideAccelerometer() {
 //**************************************************************************************************************
 // Function to send accelerometer data to biohub
 bool sendAccelerometerToBioHub() {
-  int16_t accelData[20][3]; // Array to store 20 samples of X, Y, Z data
+  int16_t accelData[40][3]; // Array to store 20 samples of X, Y, Z data
   
   // Variables for min/max debugging
   int16_t minX = INT16_MAX, maxX = INT16_MIN;
@@ -261,28 +261,30 @@ bool sendAccelerometerToBioHub() {
   int16_t minZ = INT16_MAX, maxZ = INT16_MIN;
   
   // Collect 19 accelerometer samples from FIFO (raw data only)
-  int16_t rawData[20][3]; // Store raw accelerometer data temporarily
+  int16_t rawData[40][3]; // Store raw accelerometer data temporarily
   
-  Serial.println(myIMU.fifoGetStatus() & 0x0FFF);
   int i = 0;
-  while( (( myIMU.fifoGetStatus() & 0x1000 ) == 0) && (i < 20) ) {
+  unsigned long startTime = millis();
+  while( (( myIMU.fifoGetStatus() & 0x1000 ) == 0 && i < 40) ) {
     myIMU.fifoRead(); myIMU.fifoRead(); myIMU.fifoRead(); // Read (and ignore) three gyrometer readings
     rawData[i][0] = (int16_t) myIMU.fifoRead(); // Raw X
     rawData[i][1] = (int16_t) myIMU.fifoRead(); // Raw Y
     rawData[i][2] = (int16_t) myIMU.fifoRead(); // Raw Z
-    myIMU.fifoTimestamp(); myIMU.fifoTimestamp(); // Read (and ignore) external sensor data and timestamp data
+    myIMU.fifoRead(); myIMU.fifoRead(); myIMU.fifoRead(); myIMU.fifoRead(); myIMU.fifoRead(); myIMU.fifoRead(); // Read (and ignore) external sensor data and timestamp data
     i += 1;
   }
+  unsigned long endTime = millis();
+  unsigned long duration = endTime - startTime;
+  Serial.print("Duration: ");
+  Serial.println(duration);
+  Serial.println(myIMU.fifoGetStatus() & 0x0FFF);
   Serial.println(i);
   
   // Reset FIFO immediately after reading raw data
-  uint8_t tempFIFO_CTRL5 = 0;
-  tempFIFO_CTRL5 |= LSM6DS3_ACC_GYRO_ODR_FIFO_100Hz;
-  tempFIFO_CTRL5 |= 0;
-  myIMU.writeRegister(LSM6DS3_ACC_GYRO_FIFO_CTRL5, tempFIFO_CTRL5);
+  myIMU.writeRegister(LSM6DS3_ACC_GYRO_FIFO_CTRL5, 0x00);
 
-  tempFIFO_CTRL5 = 0;
-  tempFIFO_CTRL5 |= LSM6DS3_ACC_GYRO_ODR_FIFO_100Hz;
+  uint8_t tempFIFO_CTRL5 = 0;
+  tempFIFO_CTRL5 |= LSM6DS3_ACC_GYRO_ODR_FIFO_200Hz;
   tempFIFO_CTRL5 |= 1;
   myIMU.writeRegister(LSM6DS3_ACC_GYRO_FIFO_CTRL5, tempFIFO_CTRL5);
   
@@ -305,11 +307,6 @@ bool sendAccelerometerToBioHub() {
     accelData[j][1] = ay * 61 / 1000; // Y in milli-g  
     accelData[j][2] = az * 61 / 1000; // Z in milli-g
   }
-  
-  // Use 19th sample for 20th sample to handle timing discrepancies
-  accelData[19][0] = accelData[18][0];
-  accelData[19][1] = accelData[18][1];
-  accelData[19][2] = accelData[18][2];
   
   // Print min/max values for debugging
   int16_t minX_mg = minX * 61 / 1000;

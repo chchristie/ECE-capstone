@@ -256,9 +256,6 @@ void loop() {
   if (intFlag) {
     intFlag = false;
 
-    // Send accelerometer data to biohub
-    sendAccelerometerToBioHub();
-
     // Read step counter
     uint8_t dataByte = 0;
     uint16_t stepCount = 0;
@@ -274,14 +271,6 @@ void loop() {
 
     // Read sensor hub
     body = bioHub.readBpm();
-    Serial.print("Heartrate: ");
-    Serial.println(body.heartRate); 
-    Serial.print("Confidence: ");
-    Serial.println(body.confidence); 
-    Serial.print("Oxygen: ");  
-    Serial.println(body.oxygen); 
-    Serial.print("Status: ");
-    Serial.println(body.status); 
 
     // Send heart rate
     uint8_t hrm_flags = 0x00;
@@ -307,6 +296,15 @@ void loop() {
 
     // Send Simulated Battery
     blebas.notify(93 + random(-3, 3));  // 93% battery
+
+    Serial.print("Heartrate: ");
+    Serial.println(body.heartRate); 
+    Serial.print("Confidence: ");
+    Serial.println(body.confidence); 
+    Serial.print("Oxygen: ");  
+    Serial.println(body.oxygen); 
+    Serial.print("Status: ");
+    Serial.println(body.status); 
 
   }
 }
